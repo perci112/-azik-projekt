@@ -1,6 +1,58 @@
-# Getting Started with Create React App
+# System Zarządzania Dokumentami
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+Aplikacja React do zarządzania dokumentami Word z możliwością edycji pól przez użytkowników.
+
+## Funkcjonalność
+
+### Panel Administratora
+- **Wgrywanie plików Word** - Administrator może wgrać pliki .docx
+- **Zaznaczanie pól do edycji** - Możliwość zaznaczenia tekstu w dokumencie i utworzenia pola do wypełnienia
+- **Przypisywanie użytkowników** - Wybór użytkowników, którzy mają wypełnić dokument
+- **Zarządzanie dokumentami** - Przegląd statusu dokumentów i ich postępu
+
+### Panel Użytkownika  
+- **Lista dokumentów** - Przegląd przypisanych dokumentów do wypełnienia
+- **Wypełnianie pól** - Prosty formularz do uzupełnienia pól bez konieczności otwierania dokumentu Word
+- **Zapisywanie postępu** - Możliwość zapisania i kontynuowania pracy później
+- **Wysyłanie ukończonych dokumentów** - Finalizacja wypełniania
+
+### System Logowania
+- **Role użytkowników** - Rozróżnienie między administratorem a zwykłym użytkownikiem
+- **Automatyczne przekierowanie** - Na podstawie roli użytkownika
+
+## Konta testowe
+
+### Administrator
+- **Login:** admin
+- **Hasło:** admin123
+
+### Użytkownicy
+Wszyscy użytkownicy mają hasło: **user123**
+
+**Dostępni użytkownicy:**
+- user1
+- user2  
+- user3
+- jan.kowalski
+- anna.nowak
+- piotr.wisniewski
+
+## 🚀 Uruchomienie
+
+### Backend Django (port 3001)
+```bash
+cd backend
+C:/Users/USER/Desktop/projetklazik/.venv/Scripts/python.exe manage.py runserver 3001
+```
+
+### Frontend React (port 3000)
+```bash
+npm start
+```
+
+- **Frontend:** http://localhost:3000
+- **Django API:** http://localhost:3001/api/
+- **Django Admin:** http://localhost:3001/admin/
 
 ## Available Scripts
 
