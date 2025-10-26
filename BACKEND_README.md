@@ -114,6 +114,8 @@ Wszyscy użytkownicy mają hasło: `user123`
 - django-cors-headers
 - mammoth (konwersja Word → HTML)
 - python-docx
+ - social-auth-app-django (Discord OAuth)
+ - python-dotenv (.env konfiguracja)
 
 ### Frontend
 - React 18
@@ -142,6 +144,37 @@ Możesz testować API używając narzędzi takich jak:
 - Postman
 - curl
 - Django REST Framework browsable API: `http://localhost:3001/api/`
+
+## 🔐 Logowanie przez Discord (OAuth2)
+
+Konfiguracja logowania przez Discord w środowisku deweloperskim:
+
+1) Utwórz aplikację w Discord Developer Portal:
+   - https://discord.com/developers/applications → New Application → OAuth2 → General
+   - Skopiuj Client ID i Client Secret
+
+2) Skonfiguruj Redirect URL w aplikacji Discord:
+   - Dodaj dokładnie ten adres (z portem backendu):
+     - http://localhost:3001/api/oauth/complete/discord/
+
+3) Skonfiguruj backend/.env:
+   - Skopiuj plik: `backend/.env.example` → `backend/.env`
+   - Uzupełnij wartości:
+     - DISCORD_CLIENT_ID=123456789012345678
+     - DISCORD_CLIENT_SECRET=twoj_tajemny_klucz
+     - (opcjonalnie) LOGIN_REDIRECT_URL, LOGIN_ERROR_URL
+
+4) Uruchom ponownie backend (auto-reload powinien zadziałać). W logach dev zobaczysz ostrzeżenie, jeśli brakuje danych:
+   - "[Discord OAuth] WARNING: DISCORD_CLIENT_ID or DISCORD_CLIENT_SECRET is not set ..."
+
+5) Logowanie z frontendu:
+   - Kliknij „Zaloguj przez Discord” → otworzy się popup do Discorda
+   - Po udanym logowaniu popup się zamknie, a sesja zostanie ustawiona po stronie Django
+   - Front odpyta `/api/auth/current-user/` i pokaże odpowiedni panel (profil, użytkownik, admin)
+
+Najczęstsze problemy:
+- "client_id ... nie jest snowflake" → Client ID jest niepoprawny (musi być liczbowym ID aplikacji) albo nie jest wczytany z `.env`
+- 403 CSRF przy POST → odśwież stronę, upewnij się że frontend pobrał cookie CSRF z `/api/auth/csrf/`
 
 ## 🔮 Przyszłe rozszerzenia
 

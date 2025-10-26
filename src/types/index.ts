@@ -5,6 +5,12 @@ export interface User {
   first_name?: string;
   last_name?: string;
   role: 'admin' | 'user';
+  is_superuser?: boolean;
+  profile_completed?: boolean;
+  require_profile_completion?: boolean;
+  index?: string;
+  section?: string;
+  discord_id?: string;
 }
 
 export interface LoginCredentials {

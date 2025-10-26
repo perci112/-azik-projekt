@@ -8,10 +8,35 @@ from .models import (
 
 class UserSerializer(serializers.ModelSerializer):
     role = serializers.CharField(source='userprofile.role', read_only=True)
+    profile_completed = serializers.BooleanField(source='userprofile.profile_completed', read_only=True)
+    index = serializers.CharField(source='userprofile.index', read_only=True)
+    section = serializers.CharField(source='userprofile.section', read_only=True)
+    discord_id = serializers.CharField(source='userprofile.discord_id', read_only=True)
+    is_superuser = serializers.BooleanField(read_only=True)
+    require_profile_completion = serializers.SerializerMethodField()
     
     class Meta:
         model = User
-        fields = ['id', 'username', 'email', 'first_name', 'last_name', 'role']
+        fields = [
+            'id', 'username', 'email', 'first_name', 'last_name', 'role',
+            'profile_completed', 'index', 'section', 'discord_id', 'is_superuser',
+            'require_profile_completion'
+        ]
+
+    def get_require_profile_completion(self, obj: User) -> bool:
+        """Only require profile completion for Discord-authenticated users
+        who haven't completed their profile yet. Regular username/password
+        logins should not be forced to complete profile.
+        """
+        profile = getattr(obj, 'userprofile', None)
+        if not profile or getattr(profile, 'profile_completed', False):
+            return False
+        # Check if user has Discord social auth
+        try:
+            from social_django.models import UserSocialAuth  # type: ignore
+            return UserSocialAuth.objects.filter(user=obj, provider='discord').exists()
+        except Exception:
+            return False
 
 
 class UserProfileSerializer(serializers.ModelSerializer):

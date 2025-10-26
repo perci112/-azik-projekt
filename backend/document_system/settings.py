@@ -12,9 +12,13 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 
 from pathlib import Path
 import os
+from dotenv import load_dotenv
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+# Load environment variables from .env (backend/.env)
+load_dotenv(BASE_DIR / '.env')
 
 
 # Quick-start development settings - unsuitable for production
@@ -26,7 +30,7 @@ SECRET_KEY = 'django-insecure-pt9059xcn0%l4$_c79k($qw4vjc=ne_t(p4_#wjji!%ohx$)sv
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ['localhost', '127.0.0.1']
 
 
 # Application definition
@@ -40,6 +44,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'rest_framework',
     'corsheaders',
+    'social_django',
     'documents',
 ]
 
@@ -52,6 +57,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'social_django.middleware.SocialAuthExceptionMiddleware',
 ]
 
 ROOT_URLCONF = 'document_system.urls'
@@ -145,6 +151,50 @@ CORS_ALLOWED_ORIGINS = [
 ]
 
 CORS_ALLOW_CREDENTIALS = True
+
+# CSRF z aplikacji SPA (React na porcie 3000)
+CSRF_TRUSTED_ORIGINS = [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+]
+
+# Discord OAuth (social-auth)
+from django.conf import settings as _settings
+AUTHENTICATION_BACKENDS = (
+    'social_core.backends.discord.DiscordOAuth2',
+    'django.contrib.auth.backends.ModelBackend',
+)
+
+SOCIAL_AUTH_DISCORD_KEY = os.getenv('DISCORD_CLIENT_ID', '')
+SOCIAL_AUTH_DISCORD_SECRET = os.getenv('DISCORD_CLIENT_SECRET', '')
+SOCIAL_AUTH_DISCORD_SCOPE = ['identify', 'email']
+
+# Developer hint in DEBUG if credentials are missing
+if DEBUG and (not SOCIAL_AUTH_DISCORD_KEY or not SOCIAL_AUTH_DISCORD_SECRET):
+    print("[Discord OAuth] WARNING: DISCORD_CLIENT_ID or DISCORD_CLIENT_SECRET is not set. Copy backend/.env.example to backend/.env and fill values from Discord Developer Portal.")
+
+# Callback URLs:
+# Backend completes at: http://localhost:3001/api/oauth/complete/discord/
+# After successful login, redirect user to frontend
+LOGIN_REDIRECT_URL = os.getenv('LOGIN_REDIRECT_URL', 'http://localhost:3000/?oauth=discord')
+LOGIN_ERROR_URL = os.getenv('LOGIN_ERROR_URL', 'http://localhost:3000/?oauth_error=1')
+
+# Some providers need state in session; already using Django sessions
+SOCIAL_AUTH_REDIRECT_IS_HTTPS = False
+
+# Pipeline - utworzenie profilu i zapis Discord ID
+SOCIAL_AUTH_PIPELINE = (
+    'social_core.pipeline.social_auth.social_details',
+    'social_core.pipeline.social_auth.social_uid',
+    'social_core.pipeline.social_auth.auth_allowed',
+    'social_core.pipeline.social_auth.social_user',
+    'social_core.pipeline.user.get_username',
+    'social_core.pipeline.user.create_user',
+    'documents.pipeline.save_discord_profile',
+    'social_core.pipeline.social_auth.associate_user',
+    'social_core.pipeline.social_auth.load_extra_data',
+    'social_core.pipeline.user.user_details',
+)
 
 # Media files configuration
 MEDIA_URL = '/media/'

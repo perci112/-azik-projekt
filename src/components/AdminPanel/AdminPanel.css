@@ -12,7 +12,11 @@
   align-items: center;
   box-shadow: 0 2px 4px rgba(0,0,0,0.1);
 }
+.upload-section h2{
+  margin-bottom: 3px;
+  color: #2c3e50;
 
+}
 .admin-header h1 {
   margin: 0;
 }

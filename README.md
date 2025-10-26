@@ -19,6 +19,7 @@ Aplikacja React do zarządzania dokumentami Word z możliwością edycji pól pr
 ### System Logowania
 - **Role użytkowników** - Rozróżnienie między administratorem a zwykłym użytkownikiem
 - **Automatyczne przekierowanie** - Na podstawie roli użytkownika
+ - **Logowanie przez Discord (OAuth2)** - wymaga konfiguracji `.env` w backendzie (patrz niżej)
 
 ## Konta testowe
 
@@ -53,6 +54,16 @@ npm start
 - **Frontend:** http://localhost:3000
 - **Django API:** http://localhost:3001/api/
 - **Django Admin:** http://localhost:3001/admin/
+
+## 🔐 Logowanie przez Discord (dev)
+
+1) Discord Developer Portal → Applications → OAuth2: dodaj Redirect URL:
+	- http://localhost:3001/api/oauth/complete/discord/
+2) Skopiuj `backend/.env.example` → `backend/.env` i uzupełnij:
+	- DISCORD_CLIENT_ID=123456789012345678
+	- DISCORD_CLIENT_SECRET=twoj_tajemny_klucz
+3) Uruchom/odśwież backend. Kliknij „Zaloguj przez Discord” w aplikacji.
+4) Jeśli zobaczysz błąd „client_id … nie jest snowflake” — Client ID jest niepoprawny albo nie wczytał się z `.env`.
 
 ## Available Scripts
 
