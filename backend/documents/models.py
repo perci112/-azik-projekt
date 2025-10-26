@@ -12,6 +12,12 @@ class UserProfile(models.Model):
         choices=[('admin', 'Administrator'), ('user', 'Użytkownik')],
         default='user'
     )
+    # Discord ID (jeśli logowanie przez Discord)
+    discord_id = models.CharField(max_length=64, blank=True, null=True, unique=True)
+    # Dodatkowe dane profilu
+    index = models.CharField(max_length=64, blank=True, default='')
+    section = models.CharField(max_length=128, blank=True, default='')
+    profile_completed = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     
     def __str__(self):

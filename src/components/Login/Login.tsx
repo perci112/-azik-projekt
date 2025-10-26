@@ -4,11 +4,12 @@ import './Login.css';
 
 interface LoginProps {
   onLogin: (credentials: LoginCredentials) => void;
+  onDiscordLogin?: () => void;
   isLoading: boolean;
   error?: string;
 }
 
-const Login: React.FC<LoginProps> = ({ onLogin, isLoading, error }) => {
+const Login: React.FC<LoginProps> = ({ onLogin, onDiscordLogin, isLoading, error }) => {
   const [credentials, setCredentials] = useState<LoginCredentials>({
     username: '',
     password: '',
@@ -60,6 +61,16 @@ const Login: React.FC<LoginProps> = ({ onLogin, isLoading, error }) => {
             {isLoading ? 'Logowanie...' : 'Zaloguj się'}
           </button>
         </form>
+        <div style={{ marginTop: '12px' }}>
+          <button
+            type="button"
+            className="login-button"
+            onClick={onDiscordLogin}
+            disabled={isLoading}
+          >
+            Zaloguj przez Discord
+          </button>
+        </div>
         <div className="demo-accounts">
           <p><strong>Dostępne konta:</strong></p>
           <div className="account-list">

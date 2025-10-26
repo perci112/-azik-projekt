@@ -1,8 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
-import mammoth from 'mammoth';
-import { Document, EditableField, User } from '../../types';
+import { Document, EditableField, User, DocumentAssignment } from '../../types';
 import apiClient from '../../services/api';
 import './AdminPanel.css';
+import { saveAs } from 'file-saver';
 
 interface AdminPanelProps {
   user: User;
@@ -12,7 +12,7 @@ interface AdminPanelProps {
 const AdminPanel: React.FC<AdminPanelProps> = ({ user, onLogout }) => {
   const [documents, setDocuments] = useState<Document[]>([]);
   const [selectedDocument, setSelectedDocument] = useState<Document | null>(null);
-  const [assignedDocuments, setAssignedDocuments] = useState<any[]>([]);
+  const [completedAssignments, setCompletedAssignments] = useState<DocumentAssignment[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [selectedUsers, setSelectedUsers] = useState<number[]>([]);
   const [isUploading, setIsUploading] = useState(false);
@@ -22,12 +22,14 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ user, onLogout }) => {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [usersData, documentsData] = await Promise.all([
+        const [usersData, documentsData, completed] = await Promise.all([
           apiClient.getUsers(),
-          apiClient.getAdminDocuments()
+          apiClient.getAdminDocuments(),
+          apiClient.getCompletedAssignments()
         ]);
         setUsers(usersData as User[]);
         setDocuments(documentsData as Document[]);
+        setCompletedAssignments(completed as DocumentAssignment[]);
       } catch (error) {
         console.error('Błąd pobierania danych:', error);
         alert('Błąd pobierania danych z serwera');
@@ -37,37 +39,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ user, onLogout }) => {
     fetchData();
   }, []);
 
-  // Symulowane wypełnione dokumenty - w rzeczywistej aplikacji to by było z API
-  const completedDocuments = [
-    {
-      id: 'completed-1',
-      documentName: 'Formularz osobowy.docx',
-      userName: 'jan.kowalski',
-      userEmail: 'jan.kowalski@example.com',
-      completedAt: new Date('2025-01-20'),
-      fieldValues: {
-        'name': 'Jan Kowalski',
-        'email': 'jan.kowalski@example.com',
-        'birthdate': '1990-05-15'
-      }
-    },
-    {
-      id: 'completed-2',
-      documentName: 'Umowa zlecenie.docx',
-      userName: 'anna.nowak',
-      userEmail: 'anna.nowak@example.com',
-      completedAt: new Date('2025-01-19'),
-      fieldValues: {
-        'company': 'ABC Sp. z o.o.',
-        'nip': '123-456-78-90'
-      }
-    }
-  ];
-
-  const getUserName = (userId: number) => {
-    const user = users.find(u => u.id === userId);
-    return user ? user.username : `User ${userId}`;
-  };
+  // helpery niewykorzystane zostały usunięte
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -80,7 +52,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ user, onLogout }) => {
       formData.append('name', file.name);
 
       const newDocument = await apiClient.uploadDocument(formData) as Document;
-      setDocuments([...documents, newDocument]);
+      setDocuments(prev => [...prev, newDocument]);
       setSelectedDocument(newDocument);
       
       alert('Dokument został pomyślnie wgrany!');
@@ -92,59 +64,65 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ user, onLogout }) => {
     }
   };
 
-  const handleTextSelection = () => {
+  const handleTextSelection = async () => {
     const selection = window.getSelection();
     if (!selection || !selectedDocument || selection.toString().trim() === '') return;
 
     const selectedText = selection.toString().trim();
     const fieldLabel = prompt('Podaj etykietę dla tego pola:', selectedText);
     if (!fieldLabel) return;
+    try {
+      const payload = {
+        document_id: selectedDocument.id,
+        field_id: `field_${Date.now()}`,
+        label: fieldLabel,
+        placeholder: `Wprowadź ${fieldLabel.toLowerCase()}`,
+        field_type: 'text',
+        position_start: 0,
+        position_end: selectedText.length,
+        original_value: selectedText,
+      } as any;
 
-    const fieldType = prompt('Typ pola (text/email/number/date):', 'text') as 'text' | 'email' | 'number' | 'date';
-    
-    const newField: EditableField = {
-      id: Date.now(),
-      field_id: `field_${Date.now()}`,
-      label: fieldLabel,
-      placeholder: `Wprowadź ${fieldLabel.toLowerCase()}`,
-      field_type: fieldType || 'text',
-      position_start: 0,
-      position_end: selectedText.length,
-      original_value: selectedText,
-      created_at: new Date().toISOString(),
-    };
+      const createdField = await apiClient.createField(payload) as EditableField;
 
-    const updatedDocument = {
-      ...selectedDocument,
-      editable_fields: [...selectedDocument.editable_fields, newField],
-    };
+      const updatedDocument: Document = {
+        ...selectedDocument,
+        editable_fields: [...(selectedDocument.editable_fields || []), createdField],
+      };
 
-    setSelectedDocument(updatedDocument);
-    setDocuments(documents.map(doc => 
-      doc.id === selectedDocument.id ? updatedDocument : doc
-    ));
-
-    selection.removeAllRanges();
+      setSelectedDocument(updatedDocument);
+      setDocuments(prev => prev.map(doc => doc.id === selectedDocument.id ? updatedDocument : doc));
+    } catch (e) {
+      console.error('Błąd tworzenia pola:', e);
+      alert(e instanceof Error ? e.message : 'Nie udało się utworzyć pola');
+    } finally {
+      selection.removeAllRanges();
+    }
   };
 
-  const handleSendDocument = () => {
+  const handleSendDocument = async () => {
     if (!selectedDocument || selectedUsers.length === 0) {
       alert('Wybierz dokument i użytkowników');
       return;
     }
 
-    const updatedDocument = {
-      ...selectedDocument,
-      assignedUsers: selectedUsers,
-      status: 'sent' as const,
-    };
+    try {
+      await apiClient.assignDocument(selectedDocument.id, selectedUsers);
 
-    setDocuments(documents.map(doc => 
-      doc.id === selectedDocument.id ? updatedDocument : doc
-    ));
-    
-    alert(`Dokument wysłany do ${selectedUsers.length} użytkowników`);
-    setSelectedUsers([]);
+      const updatedDocument: Document = {
+        ...selectedDocument,
+        status: 'sent',
+      } as Document;
+
+      setDocuments(prev => prev.map(doc => doc.id === selectedDocument.id ? updatedDocument : doc));
+      setSelectedDocument(updatedDocument);
+
+      alert(`Dokument wysłany do ${selectedUsers.length} użytkowników`);
+      setSelectedUsers([]);
+    } catch (e) {
+      console.error('Błąd podczas wysyłania dokumentu:', e);
+      alert(e instanceof Error ? e.message : 'Nie udało się przypisać dokumentu');
+    }
   };
 
   const handleUserSelection = (userId: number) => {
@@ -161,6 +139,14 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ user, onLogout }) => {
         <h1>Panel Administratora</h1>
         <div className="admin-info">
           <span>Witaj, {user.username}!</span>
+          <button
+            onClick={() => { try { window.location.assign('/user'); } catch {} }}
+            className="send-button"
+            style={{ marginRight: 8 }}
+            title="Przejdź do panelu użytkownika (moje przypisania)"
+          >
+            Moje dokumenty (wypełnianie)
+          </button>
           <button onClick={onLogout} className="logout-button">Wyloguj</button>
         </div>
       </header>
@@ -186,12 +172,33 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ user, onLogout }) => {
                 <div
                   key={doc.id}
                   className={`document-item ${selectedDocument?.id === doc.id ? 'selected' : ''}`}
-                  onClick={() => setSelectedDocument(doc)}
                 >
-                  <h3>{doc.name}</h3>
-                  <p>Status: {doc.status}</p>
-                  <p>Pola do edycji: {doc.editable_fields?.length || 0}</p>
-                  <p>Przypisani użytkownicy: {doc.assigned_users_count || 0}</p>
+                  <div onClick={() => setSelectedDocument(doc)} style={{ cursor: 'pointer' }}>
+                    <h3>{doc.name}</h3>
+                    <p>Status: {doc.status}</p>
+                    <p>Pola do edycji: {doc.editable_fields?.length || 0}</p>
+                    <p>Przypisani użytkownicy: {doc.assigned_users_count || 0}</p>
+                  </div>
+                  <div style={{ marginTop: 8, display: 'flex', gap: 8 }}>
+                    <button
+                      className="logout-button"
+                      onClick={async () => {
+                        if (!window.confirm('Usunąć ten dokument? Spowoduje to usunięcie przypisań i wygenerowanych plików.')) return;
+                        try {
+                          await apiClient.deleteDocument(doc.id);
+                          setDocuments(prev => prev.filter(d => d.id !== doc.id));
+                          if (selectedDocument?.id === doc.id) {
+                            setSelectedDocument(null);
+                          }
+                        } catch (e) {
+                          console.error('Błąd usuwania dokumentu:', e);
+                          alert(e instanceof Error ? e.message : 'Nie udało się usunąć dokumentu');
+                        }
+                      }}
+                    >
+                      Usuń dokument
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -208,9 +215,27 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ user, onLogout }) => {
                 Zaznacz tekst myszką, który ma być edytowalny przez użytkowników, 
                 a następnie kliknij przycisk "Dodaj pole".
               </p>
-              <button onClick={handleTextSelection} className="add-field-button">
-                Dodaj pole z zaznaczonego tekstu
-              </button>
+              <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 8 }}>
+                <button onClick={handleTextSelection} className="add-field-button">
+                  Dodaj pole z zaznaczonego tekstu
+                </button>
+                <button
+                  onClick={async () => {
+                    if (!selectedDocument) return;
+                    try {
+                      const updated = await apiClient.reprocessDocument(selectedDocument.id) as Document;
+                      setSelectedDocument(updated);
+                      setDocuments(prev => prev.map(d => d.id === updated.id ? updated : d));
+                    } catch (e) {
+                      console.error('Błąd odświeżania zawartości:', e);
+                      alert(e instanceof Error ? e.message : 'Nie udało się odświeżyć zawartości');
+                    }
+                  }}
+                  className="add-field-button"
+                >
+                  Odśwież zawartość z pliku
+                </button>
+              </div>
               <div 
                 className="document-preview"
                 dangerouslySetInnerHTML={{ __html: selectedDocument.original_content }}
@@ -222,10 +247,33 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ user, onLogout }) => {
                 <h3>Pola do edycji</h3>
                 <div className="fields-list">
                   {selectedDocument.editable_fields.map((field: EditableField) => (
-                    <div key={field.id} className="field-item">
-                      <strong>{field.label}</strong> ({field.field_type})
-                      <p>Placeholder: {field.placeholder}</p>
-                      <p>Wartość: {field.original_value}</p>
+                    <div key={field.id} className="field-item" style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+                      <div style={{ flex: 1 }}>
+                        <strong>{field.label}</strong>
+                        <p>Placeholder: {field.placeholder}</p>
+                        <p>Wartość: {field.original_value}</p>
+                      </div>
+                      <button
+                        className="logout-button"
+                        onClick={async () => {
+                          if (!window.confirm('Usunąć to pole?')) return;
+                          try {
+                            await apiClient.deleteField(field.id);
+                            const updatedDoc: Document = {
+                              ...selectedDocument,
+                              editable_fields: selectedDocument.editable_fields.filter(f => f.id !== field.id),
+                            };
+                            setSelectedDocument(updatedDoc);
+                            setDocuments(prev => prev.map(d => d.id === updatedDoc.id ? updatedDoc : d));
+                          } catch (e) {
+                            console.error('Błąd usuwania pola:', e);
+                            alert(e instanceof Error ? e.message : 'Nie udało się usunąć pola');
+                          }
+                        }}
+                        title="Usuń pole"
+                      >
+                        Usuń
+                      </button>
                     </div>
                   ))}
                 </div>
@@ -258,19 +306,79 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ user, onLogout }) => {
 
         <div className="completed-documents-section">
           <h2>Wypełnione dokumenty</h2>
+          <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+            <button
+              className="send-button"
+              onClick={async () => {
+                try {
+                  const { blob, filename } = await apiClient.fetchCompletedZip();
+                  saveAs(blob, filename);
+                } catch (e) {
+                  console.error('Błąd pobierania ZIP:', e);
+                  alert(e instanceof Error ? e.message : 'Nie udało się pobrać ZIPa');
+                }
+              }}
+            >
+              Pobierz wszystkie (ZIP)
+            </button>
+            {selectedDocument && (
+              <button
+                className="send-button"
+                onClick={async () => {
+                  try {
+                    const { blob, filename } = await apiClient.fetchCompletedZip(selectedDocument.id);
+                    saveAs(blob, filename);
+                  } catch (e) {
+                    console.error('Błąd pobierania ZIP:', e);
+                    alert(e instanceof Error ? e.message : 'Nie udało się pobrać ZIPa');
+                  }
+                }}
+              >
+                Pobierz ZIP dla tego dokumentu
+              </button>
+            )}
+          </div>
           <div className="completed-documents-list">
-            {completedDocuments.map(doc => (
-              <div key={doc.id} className="completed-document-item">
-                <h3>{doc.documentName}</h3>
-                <p>Użytkownik: {doc.userName} ({doc.userEmail})</p>
-                <p>Data wypełnienia: {doc.completedAt?.toLocaleString()}</p>
-                <div className="field-values">
-                  {Object.entries(doc.fieldValues).map(([key, value]) => (
-                    <div key={key} className="field-value-item">
-                      <strong>{key}:</strong> {value}
-                    </div>
-                  ))}
-                </div>
+            {completedAssignments.length === 0 && (
+              <p>Brak ukończonych przypisań.</p>
+            )}
+            {completedAssignments.map(ass => (
+              <div key={ass.id} className="completed-document-item">
+                <h3>{ass.document_name}</h3>
+                <p>Użytkownik: {ass.user_username}</p>
+                {ass.completed_at && (
+                  <p>Ukończono: {new Date(ass.completed_at).toLocaleString()}</p>
+                )}
+                <button
+                  onClick={async () => {
+                    try {
+                      const { blob, filename } = await apiClient.fetchAssignmentDocx(ass.id);
+                      saveAs(blob, filename);
+                    } catch (e) {
+                      console.error('Błąd pobierania pliku:', e);
+                      alert(e instanceof Error ? e.message : 'Nie udało się pobrać pliku');
+                    }
+                  }}
+                  className="send-button"
+                >
+                  Pobierz DOCX
+                </button>
+                <button
+                  onClick={async () => {
+                    if (!window.confirm('Usunąć to wypełnione przypisanie i jego pliki?')) return;
+                    try {
+                      await apiClient.deleteAssignment(ass.id);
+                      setCompletedAssignments(prev => prev.filter(a => a.id !== ass.id));
+                    } catch (e) {
+                      console.error('Błąd usuwania przypisania:', e);
+                      alert(e instanceof Error ? e.message : 'Nie udało się usunąć przypisania');
+                    }
+                  }}
+                  className="logout-button"
+                  style={{ marginLeft: 8 }}
+                >
+                  Usuń
+                </button>
               </div>
             ))}
           </div>
